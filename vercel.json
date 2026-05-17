@@ -1,6 +1,6 @@
 {
-  "buildCommand": "cd apps/web && next build",
-  "installCommand": "pnpm install",
+  "buildCommand": "pnpm --filter @clip-ai/database exec prisma generate && cd apps/web && next build",
+  "installCommand": "pnpm install --no-frozen-lockfile",
   "framework": "nextjs",
   "outputDirectory": "apps/web/.next"
 }
