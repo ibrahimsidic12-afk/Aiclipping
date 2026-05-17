@@ -1,11 +1,14 @@
 export type VideoStatus =
   | 'uploading'
   | 'uploaded'
+  | 'fetching'
   | 'processing'
   | 'transcribing'
   | 'analyzing'
   | 'ready'
   | 'error';
+
+export type VideoSourceType = 'upload' | 'youtube';
 
 export interface VideoMetadata {
   duration: number; // seconds
@@ -31,6 +34,9 @@ export interface Video {
   /** Thumbnail URL */
   thumbnailUrl?: string;
   status: VideoStatus;
+  sourceType?: VideoSourceType;
+  /** Original URL when sourceType is "youtube" */
+  sourceUrl?: string;
   metadata?: VideoMetadata;
   /** Transcript ID once transcription completes */
   transcriptId?: string;

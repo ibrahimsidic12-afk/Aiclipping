@@ -10,7 +10,8 @@ export type QueueName =
   | 'detect-highlights'
   | 'generate-captions'
   | 'render-clip'
-  | 'generate-preview';
+  | 'generate-preview'
+  | 'fetch-source';
 
 const queues = new Map<QueueName, Queue>();
 

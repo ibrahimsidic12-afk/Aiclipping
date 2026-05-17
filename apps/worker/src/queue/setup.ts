@@ -4,6 +4,7 @@ import { processTranscription } from '../jobs/transcribe.job.js';
 import { processHighlightDetection } from '../jobs/detect-highlights.job.js';
 import { processRenderClip } from '../jobs/render-clip.job.js';
 import { processCaptionGeneration } from '../jobs/generate-captions.job.js';
+import { processFetchSource } from '../jobs/fetch-source.job.js';
 import { logger } from '../lib/logger.js';
 import { persistenceService } from '../lib/persistence.js';
 import { closeAllQueues } from './client.js';
@@ -28,6 +29,7 @@ export interface QueueMap {
   'generate-captions': Queue;
   'render-clip': Queue;
   'generate-preview': Queue;
+  'fetch-source': Queue;
 }
 
 /**
@@ -58,6 +60,13 @@ export function createQueues(): QueueMap {
       },
     }),
     'generate-preview': new Queue('generate-preview', defaultOpts),
+    'fetch-source': new Queue('fetch-source', {
+      ...defaultOpts,
+      defaultJobOptions: {
+        ...defaultOpts.defaultJobOptions,
+        attempts: 2, // YouTube fetches are bandwidth-heavy
+      },
+    }),
   };
 }
 
@@ -99,6 +108,14 @@ export function createWorkers(): Worker[] {
     new Worker('render-clip', processRenderClip, {
       connection,
       concurrency: Math.max(1, Math.floor(CONCURRENCY / 2)),
+    })
+  );
+
+  // Fetch-source worker (bandwidth-bound, low concurrency)
+  workers.push(
+    new Worker('fetch-source', processFetchSource, {
+      connection,
+      concurrency: 2,
     })
   );
 

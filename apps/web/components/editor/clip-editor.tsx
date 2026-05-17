@@ -165,7 +165,9 @@ export function ClipEditor({ videoId }: ClipEditorProps) {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" />
                 </svg>
                 <p className="text-surface-500 text-sm">
-                  {videoData?.status === 'processing' ? 'Processing video...' : 'Video Preview'}
+                {videoData?.status === 'fetching'
+                  ? 'Fetching from YouTube...'
+                  : videoData?.status === 'processing' ? 'Processing video...' : 'Video Preview'}
                 </p>
                 <p className="text-surface-600 text-xs mt-1 font-mono">
                   {videoData?.originalName || videoId.slice(0, 8)}
@@ -402,13 +404,15 @@ export function ClipEditor({ videoId }: ClipEditorProps) {
                 ) : (
                   <div className="p-4 rounded-xl bg-surface-800/50 border border-surface-700 text-center">
                     <p className="text-surface-400 text-sm">
-                      {videoData?.status === 'processing' || videoData?.status === 'transcribing'
+                      {videoData?.status === 'fetching'
+                        ? 'Fetching video from YouTube...'
+                        : videoData?.status === 'processing' || videoData?.status === 'transcribing'
                         ? 'AI is analyzing your video...'
                         : videoData?.status === 'analyzing'
                         ? 'Detecting highlights...'
                         : 'No clips detected yet'}
                     </p>
-                    {(videoData?.status === 'processing' || videoData?.status === 'transcribing' || videoData?.status === 'analyzing') && (
+                    {(videoData?.status === 'fetching' || videoData?.status === 'processing' || videoData?.status === 'transcribing' || videoData?.status === 'analyzing') && (
                       <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin mx-auto mt-3" />
                     )}
                   </div>

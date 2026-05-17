@@ -26,6 +26,7 @@ enum UserPlan {
 enum VideoStatus {
   uploading
   uploaded
+  fetching
   processing
   transcribing
   analyzing
@@ -50,6 +51,7 @@ enum JobType {
   generate_preview
   extract_keyframes
   analyze_keyframes
+  fetch_source
 }
 
 enum JobStatus {
@@ -86,6 +88,11 @@ enum CaptionAnimation {
   none
 }
 
+enum VideoSourceType {
+  upload
+  youtube
+}
+
 // ─── Models ──────────────────────────────────────────
 
 model User {
@@ -116,6 +123,8 @@ model Video {
   url          String?
   thumbnailUrl String?
   status       VideoStatus @default(uploading)
+  sourceType   VideoSourceType @default(upload)
+  sourceUrl    String?     @db.VarChar(2048)
   metadata     Json?
   error        String?     @db.Text
   tags         String[]    @default([])

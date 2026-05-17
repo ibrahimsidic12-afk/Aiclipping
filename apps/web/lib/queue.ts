@@ -10,7 +10,8 @@ export type QueueName =
   | 'detect-highlights'
   | 'generate-captions'
   | 'render-clip'
-  | 'generate-preview';
+  | 'generate-preview'
+  | 'fetch-source';
 
 /**
  * Per-queue Queue instances cached on globalThis to survive HMR.

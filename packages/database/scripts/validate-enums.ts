@@ -25,6 +25,7 @@ import {
   Platform,
   UserRole,
   UserPlan,
+  VideoSourceType,
 } from '@prisma/client';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -59,7 +60,7 @@ const ENUM_PAIRS: Array<{ name: string; prisma: string[]; ts: string[] }> = [
   {
     name: 'VideoStatus',
     prisma: Object.values(VideoStatus),
-    ts: ['uploading', 'uploaded', 'processing', 'transcribing', 'analyzing', 'ready', 'error'],
+    ts: ['uploading', 'uploaded', 'fetching', 'processing', 'transcribing', 'analyzing', 'ready', 'error'],
   },
   {
     name: 'ClipStatus',
@@ -96,6 +97,11 @@ const ENUM_PAIRS: Array<{ name: string; prisma: string[]; ts: string[] }> = [
     prisma: Object.values(UserPlan),
     ts: ['free', 'pro', 'enterprise'],
   },
+  {
+    name: 'VideoSourceType',
+    prisma: Object.values(VideoSourceType),
+    ts: ['upload', 'youtube'],
+  },
 ];
 
 /**
@@ -110,6 +116,7 @@ const JOB_TYPE_TS_VALUES = [
   'generate-preview',
   'extract-keyframes',
   'analyze-keyframes',
+  'fetch-source',
 ];
 
 const JOB_TYPE_PRISMA_TO_TS: Record<string, string> = {
@@ -120,6 +127,7 @@ const JOB_TYPE_PRISMA_TO_TS: Record<string, string> = {
   generate_preview: 'generate-preview',
   extract_keyframes: 'extract-keyframes',
   analyze_keyframes: 'analyze-keyframes',
+  fetch_source: 'fetch-source',
 };
 
 let failed = false;

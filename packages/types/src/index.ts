@@ -3,7 +3,7 @@
 // ═══════════════════════════════════════════════════════
 
 export type { User, UserRole, UserPlan } from './user';
-export type { Video, VideoStatus, VideoMetadata } from './video';
+export type { Video, VideoStatus, VideoMetadata, VideoSourceType } from './video';
 export type { Clip, ClipStatus, ClipSettings, ClipExport } from './clip';
 export type { Job, JobType, JobStatus, JobPayload, JobResult, JobPayloadMap, JobResultMap } from './job';
 export type {

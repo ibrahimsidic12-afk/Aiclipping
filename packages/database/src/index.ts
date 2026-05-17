@@ -28,6 +28,7 @@ export {
   CaptionAnimation,
   UserRole,
   UserPlan,
+  VideoSourceType,
 } from './types';
 
 // ─── Enum Mapping Utilities ──────────────────────────

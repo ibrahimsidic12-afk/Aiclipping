@@ -19,7 +19,8 @@
     "@clip-ai/database": "workspace:*",
     "@clip-ai/regolo-client": "workspace:*",
     "@clip-ai/video-core": "workspace:*",
-    "@clip-ai/types": "workspace:*"
+    "@clip-ai/types": "workspace:*",
+    "youtube-dl-exec": "^3.0.10"
   },
   "devDependencies": {
     "typescript": "^5.4.0",

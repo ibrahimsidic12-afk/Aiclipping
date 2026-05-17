@@ -30,6 +30,7 @@ export {
   Platform,
   UserRole,
   UserPlan,
+  VideoSourceType,
 } from '@prisma/client';
 
 // CaptionStyle and CaptionAnimation are re-exported as type-only since

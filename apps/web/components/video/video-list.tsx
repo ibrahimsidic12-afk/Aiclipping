@@ -29,7 +29,7 @@ export function VideoList() {
   // Poll for updates when videos are processing
   useEffect(() => {
     const hasProcessing = videos.some(v =>
-      ['processing', 'transcribing', 'analyzing', 'uploading'].includes(v.status)
+      ['fetching', 'processing', 'transcribing', 'analyzing', 'uploading'].includes(v.status)
     );
     if (!hasProcessing) return;
 
@@ -90,6 +90,7 @@ function VideoCard({ video }: { video: Video }) {
   const defaultStatus = { color: 'bg-surface-500/10 text-surface-400', label: 'Uploaded', animate: false };
   const statusConfig: Record<string, { color: string; label: string; animate: boolean }> = {
     ready: { color: 'bg-green-500/10 text-green-400', label: 'Ready', animate: false },
+    fetching: { color: 'bg-cyan-500/10 text-cyan-400', label: 'Fetching', animate: true },
     processing: { color: 'bg-yellow-500/10 text-yellow-400', label: 'Processing', animate: true },
     transcribing: { color: 'bg-blue-500/10 text-blue-400', label: 'Transcribing', animate: true },
     analyzing: { color: 'bg-purple-500/10 text-purple-400', label: 'Analyzing', animate: true },

@@ -19,6 +19,7 @@ export const PrismaJobType = {
   generate_preview: 'generate_preview',
   extract_keyframes: 'extract_keyframes',
   analyze_keyframes: 'analyze_keyframes',
+  fetch_source: 'fetch_source',
 } as const;
 
 export type PrismaJobType = (typeof PrismaJobType)[keyof typeof PrismaJobType];
@@ -32,7 +33,8 @@ export type TSJobType =
   | 'render-clip'
   | 'generate-preview'
   | 'extract-keyframes'
-  | 'analyze-keyframes';
+  | 'analyze-keyframes'
+  | 'fetch-source';
 
 // ─── JobType Mapping ─────────────────────────────────
 
@@ -44,6 +46,7 @@ const JOB_TYPE_MAP: Record<PrismaJobType, TSJobType> = {
   generate_preview: 'generate-preview',
   extract_keyframes: 'extract-keyframes',
   analyze_keyframes: 'analyze-keyframes',
+  fetch_source: 'fetch-source',
 };
 
 const REVERSE_JOB_TYPE_MAP: Record<TSJobType, PrismaJobType> = Object.fromEntries(

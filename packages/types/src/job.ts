@@ -5,7 +5,8 @@ export type JobType =
   | 'render-clip'
   | 'generate-preview'
   | 'extract-keyframes'
-  | 'analyze-keyframes';
+  | 'analyze-keyframes'
+  | 'fetch-source';
 
 export type JobStatus =
   | 'waiting'
@@ -55,6 +56,10 @@ export interface JobPayloadMap {
     frameStorageKeys: string[];
     transcript: string;
   };
+  'fetch-source': {
+    videoId: string;
+    sourceUrl: string;
+  };
 }
 
 export type JobPayload = JobPayloadMap[JobType];
@@ -92,6 +97,11 @@ export interface JobResultMap {
       description: string;
       engagementScore: number;
     }>;
+  };
+  'fetch-source': {
+    storageKey: string;
+    title: string;
+    duration: number;
   };
 }
 
