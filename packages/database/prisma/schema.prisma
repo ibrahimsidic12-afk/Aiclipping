@@ -1,0 +1,286 @@
+// ═══════════════════════════════════════════════════════
+// 🗄️ ClipAI - Prisma Schema
+// Database: Neon PostgreSQL (Serverless)
+// ═══════════════════════════════════════════════════════
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL") // For migrations (non-pooled)
+}
+
+// ─────────────────────────────────────────────────────
+// Users
+// ─────────────────────────────────────────────────────
+
+enum UserPlan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  avatarUrl     String?
+  plan          UserPlan  @default(FREE)
+  credits       Int       @default(10) // Free tier gets 10 clips
+  totalClips    Int       @default(0)
+  totalVideos   Int       @default(0)
+
+  // Relations
+  videos         Video[]
+  clips          Clip[]
+  youtubeImports YouTubeImport[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+// ─────────────────────────────────────────────────────
+// Videos
+// ─────────────────────────────────────────────────────
+
+enum VideoStatus {
+  UPLOADING
+  UPLOADED
+  PROCESSING
+  TRANSCRIBING
+  ANALYZING
+  READY
+  ERROR
+}
+
+model Video {
+  id           String      @id @default(cuid())
+  userId       String
+  originalName String
+  storageKey   String
+  url          String?     // CDN/presigned URL
+  thumbnailUrl String?
+  status       VideoStatus @default(UPLOADING)
+
+  // Metadata (extracted from video file)
+  duration     Float?      // seconds
+  width        Int?
+  height       Int?
+  fps          Float?
+  bitrate      Int?
+  codec        String?
+  audioCodec   String?
+  fileSize     Int?        // bytes
+  format       String?
+
+  // Processing
+  error        String?
+  tags         String[]    @default([])
+
+  // Relations
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transcript   Transcript?
+  clips        Clip[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@map("videos")
+}
+
+// ─────────────────────────────────────────────────────
+// Transcripts
+// ─────────────────────────────────────────────────────
+
+model Transcript {
+  id          String   @id @default(cuid())
+  videoId     String   @unique
+  text        String   // Full transcript text
+  language    String   @default("en")
+  duration    Float    // Total duration in seconds
+  wordCount   Int      @default(0)
+  storageKey  String?  // S3 key for full JSON with word-level timing
+
+  // Word-level segments stored as JSON
+  segments    Json?    // Array of { start, end, text, words[] }
+
+  // Relations
+  video       Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("transcripts")
+}
+
+// ─────────────────────────────────────────────────────
+// Clips
+// ─────────────────────────────────────────────────────
+
+enum ClipStatus {
+  PENDING
+  GENERATING_CAPTIONS
+  RENDERING
+  READY
+  EXPORTED
+  ERROR
+}
+
+enum Platform {
+  TIKTOK
+  REELS
+  SHORTS
+  ALL
+}
+
+model Clip {
+  id            String     @id @default(cuid())
+  videoId       String
+  userId        String
+  title         String     // Hook text / clip title
+  hookText      String?    // Opening hook text for the clip
+
+  // Timing
+  startTime     Float      // Start time in seconds
+  endTime       Float      // End time in seconds
+  duration      Float      // Clip duration in seconds
+
+  // AI Scoring
+  viralityScore Float      @default(0) // 0-100 score
+  tags          String[]   @default([])
+
+  // Output
+  status        ClipStatus @default(PENDING)
+  platform      Platform   @default(ALL)
+  outputKey     String?    // S3 key for rendered clip
+  outputUrl     String?    // CDN URL for rendered clip
+  thumbnailUrl  String?
+  fileSize      Int?       // Output file size in bytes
+
+  // Caption settings
+  captionStyle  String     @default("bold") // bold, minimal, karaoke, outline
+  captionKey    String?    // S3 key for subtitle file (.ass/.srt)
+
+  // Settings used for rendering
+  settings      Json?      // Full clip settings JSON
+
+  error         String?
+
+  // Relations
+  video         Video      @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([videoId])
+  @@index([userId])
+  @@index([status])
+  @@index([viralityScore(sort: Desc)])
+  @@map("clips")
+}
+
+// ─────────────────────────────────────────────────────
+// YouTube Imports
+// ─────────────────────────────────────────────────────
+
+enum YouTubeImportStatus {
+  PENDING
+  DOWNLOADING
+  DOWNLOADED
+  PROCESSING
+  CLIPPING
+  COMPLETED
+  ERROR
+}
+
+model YouTubeImport {
+  id             String              @id @default(cuid())
+  userId         String
+  url            String              // Original YouTube URL
+  youtubeVideoId String              // Extracted YouTube video ID
+  title          String
+  channelName    String?
+  duration       Float               @default(0)
+  thumbnailUrl   String?
+
+  // Internal references
+  videoId        String?             // Created video record ID
+  storageKey     String?
+
+  // Status
+  status         YouTubeImportStatus @default(PENDING)
+  error          String?
+  progress       Int                 @default(0) // 0-100
+
+  // Auto-clip settings
+  clipSettings   Json?               // { platform, maxClips, style, etc. }
+
+  // Generated clips
+  clipIds        String[]            @default([])
+
+  // Relations
+  user           User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@map("youtube_imports")
+}
+
+// ─────────────────────────────────────────────────────
+// Jobs (for tracking processing pipeline)
+// ─────────────────────────────────────────────────────
+
+enum JobType {
+  TRANSCRIBE
+  DETECT_HIGHLIGHTS
+  GENERATE_CAPTIONS
+  RENDER_CLIP
+  YOUTUBE_DOWNLOAD
+  AUTO_CLIP
+}
+
+enum JobStatus {
+  WAITING
+  ACTIVE
+  COMPLETED
+  FAILED
+  DELAYED
+}
+
+model Job {
+  id          String    @id @default(cuid())
+  type        JobType
+  status      JobStatus @default(WAITING)
+  payload     Json      // Job-specific data
+  result      Json?     // Job result
+  error       String?
+  progress    Int       @default(0) // 0-100
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(3)
+  priority    Int       @default(5) // Lower = higher priority
+
+  // Reference to related entity
+  videoId     String?
+  clipId      String?
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([type, status])
+  @@index([videoId])
+  @@index([clipId])
+  @@map("jobs")
+}

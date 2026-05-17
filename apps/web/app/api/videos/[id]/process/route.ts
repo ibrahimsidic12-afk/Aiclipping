@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { db } from '@clip-ai/database';
 
 /**
  * POST /api/videos/:id/process
  * Trigger AI processing pipeline for uploaded video.
- * Enqueues transcription → highlight detection → caption generation jobs.
+ * Updates video status and creates job records in the database.
  */
 export async function POST(
   request: NextRequest,
@@ -19,14 +20,52 @@ export async function POST(
       );
     }
 
-    // TODO: Validate video exists in database
-    // TODO: Enqueue BullMQ job: 'transcribe' → which cascades into highlight detection
+    // Verify video exists
+    const video = await db.video.findUnique({
+      where: { id: videoId },
+    });
 
-    // For now, return success response
+    if (!video) {
+      return NextResponse.json(
+        { success: false, error: { code: 'NOT_FOUND', message: 'Video not found' } },
+        { status: 404 }
+      );
+    }
+
+    // Update video status to processing
+    await db.video.update({
+      where: { id: videoId },
+      data: { status: 'PROCESSING' },
+    });
+
+    // Create job record in database for tracking
+    const job = await db.job.create({
+      data: {
+        type: 'TRANSCRIBE',
+        status: 'WAITING',
+        videoId,
+        payload: {
+          videoId,
+          audioStorageKey: video.storageKey,
+          language: 'auto',
+        },
+        priority: 2,
+      },
+    });
+
+    // TODO: Enqueue BullMQ job
+    // const { Queue } = await import('bullmq');
+    // const transcribeQueue = new Queue('transcribe', { connection: redis });
+    // await transcribeQueue.add('transcribe', {
+    //   videoId,
+    //   audioStorageKey: video.storageKey,
+    // });
+
     return NextResponse.json({
       success: true,
       data: {
         videoId,
+        jobId: job.id,
         status: 'processing',
         message: 'Video processing pipeline started',
         jobs: [

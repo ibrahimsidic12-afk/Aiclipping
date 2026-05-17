@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { randomUUID } from 'crypto';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { db } from '@clip-ai/database';
 
 const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE_MB || '500', 10) * 1024 * 1024;
 
@@ -30,7 +30,7 @@ const BUCKET = process.env.S3_BUCKET || 'clip-app-videos';
 
 /**
  * POST /api/upload
- * Generate a presigned S3/R2 upload URL for the client.
+ * Generate a presigned S3/R2 upload URL and create video record in database.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -63,10 +63,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate video ID and storage key
-    const videoId = randomUUID();
+    // Create video record in database
+    const video = await db.video.create({
+      data: {
+        originalName: filename,
+        storageKey: '', // Will be updated after we generate it
+        fileSize: size,
+        format: contentType,
+        status: 'UPLOADING',
+        // TODO: Get real userId from auth session
+        userId: 'anonymous',
+      },
+    });
+
     const extension = filename.split('.').pop() || 'mp4';
-    const storageKey = `uploads/${videoId}/original.${extension}`;
+    const storageKey = `uploads/${video.id}/original.${extension}`;
+
+    // Update the video with the storage key
+    await db.video.update({
+      where: { id: video.id },
+      data: { storageKey },
+    });
 
     // Generate real presigned upload URL (works with R2, S3, and MinIO)
     const uploadUrl = await getSignedUrl(
@@ -82,7 +99,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: {
-        videoId,
+        videoId: video.id,
         uploadUrl,
         storageKey,
         expiresIn: 3600,

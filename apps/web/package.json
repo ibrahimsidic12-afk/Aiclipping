@@ -15,6 +15,7 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "@clip-ai/types": "workspace:*",
+    "@clip-ai/database": "workspace:*",
     "@clip-ai/regolo-client": "workspace:*",
     "lucide-react": "^0.344.0",
     "clsx": "^2.1.0",

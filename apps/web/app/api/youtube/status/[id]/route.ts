@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { db } from '@clip-ai/database';
 
 /**
  * GET /api/youtube/status/[id]
- * Check the status of a YouTube import job.
+ * Check the status of a YouTube import job from database.
  */
 export async function GET(
   request: NextRequest,
@@ -18,21 +19,39 @@ export async function GET(
       );
     }
 
-    // TODO: In production, look up job status from Redis/BullMQ
-    // const job = await downloadQueue.getJob(id);
-    // return real progress from the worker
+    // Look up import status from database
+    const youtubeImport = await db.youTubeImport.findUnique({
+      where: { id },
+    });
 
-    // Mock progress response for development
-    // In production, this would check BullMQ job progress
+    if (!youtubeImport) {
+      return NextResponse.json(
+        { success: false, error: { code: 'NOT_FOUND', message: 'Import not found' } },
+        { status: 404 }
+      );
+    }
+
+    // Map status to user-friendly message
+    const statusMessages: Record<string, string> = {
+      PENDING: 'Waiting to start...',
+      DOWNLOADING: 'Downloading video from YouTube...',
+      DOWNLOADED: 'Video downloaded, starting analysis...',
+      PROCESSING: 'Transcribing and analyzing video...',
+      CLIPPING: 'Generating viral clips with AI...',
+      COMPLETED: 'All clips generated successfully!',
+      ERROR: youtubeImport.error || 'Something went wrong',
+    };
+
     return NextResponse.json({
       success: true,
       data: {
-        importId: id,
-        status: 'processing',
-        progress: 45,
-        message: 'Analyzing video for viral moments...',
-        videoId: null,
-        clipIds: [],
+        importId: youtubeImport.id,
+        status: youtubeImport.status.toLowerCase(),
+        progress: youtubeImport.progress,
+        message: statusMessages[youtubeImport.status] || 'Processing...',
+        videoId: youtubeImport.videoId,
+        clipIds: youtubeImport.clipIds,
+        error: youtubeImport.error,
       },
     });
   } catch (error) {
