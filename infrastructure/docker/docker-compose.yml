@@ -94,7 +94,7 @@ services:
       - REGOLO_BASE_URL=${REGOLO_BASE_URL:-https://api.regolo.ai/v1}
       # Storage (Cloudflare R2 in production)
       - S3_PROVIDER=${S3_PROVIDER:-r2}
-      - S3_BUCKET=${S3_BUCKET:-aicliping}
+      - S3_BUCKET=${S3_BUCKET:-aiclipping}
       - S3_REGION=${S3_REGION:-auto}
       - S3_ENDPOINT=${S3_ENDPOINT}
       - S3_ACCESS_KEY=${S3_ACCESS_KEY}
