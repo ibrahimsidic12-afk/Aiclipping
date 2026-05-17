@@ -2,21 +2,21 @@
 // 📦 @clip-ai/types - Shared TypeScript Definitions
 // ═══════════════════════════════════════════════════════
 
-export type { User, UserRole, UserPlan } from './user.js';
-export type { Video, VideoStatus, VideoMetadata } from './video.js';
-export type { Clip, ClipStatus, ClipSettings, ClipExport } from './clip.js';
-export type { Job, JobType, JobStatus, JobPayload, JobResult, JobPayloadMap, JobResultMap } from './job.js';
+export type { User, UserRole, UserPlan } from './user';
+export type { Video, VideoStatus, VideoMetadata } from './video';
+export type { Clip, ClipStatus, ClipSettings, ClipExport } from './clip';
+export type { Job, JobType, JobStatus, JobPayload, JobResult, JobPayloadMap, JobResultMap } from './job';
 export type {
   Transcript,
   TranscriptSegment,
   TranscriptWord,
-} from './transcript.js';
+} from './transcript';
 export type {
   Caption,
   CaptionStyle,
   CaptionAnimation,
   CaptionPosition,
-} from './caption.js';
-export type { Platform, ExportPreset } from './platform.js';
-export { PLATFORM_PRESETS } from './platform.js';
-export type { ApiResponse, PaginatedResponse, ApiError, ErrorCode } from './api.js';
+} from './caption';
+export type { Platform, ExportPreset } from './platform';
+export { PLATFORM_PRESETS } from './platform';
+export type { ApiResponse, PaginatedResponse, ApiError, ErrorCode } from './api';

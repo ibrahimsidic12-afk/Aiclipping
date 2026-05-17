@@ -1,5 +1,5 @@
-import { formatTimestamp } from './utils.js';
-import type { CaptionLine } from './types.js';
+import { formatTimestamp } from './utils';
+import type { CaptionLine } from './types';
 
 /**
  * Generate SRT subtitle content from caption lines.

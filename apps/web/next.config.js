@@ -1,7 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  transpilePackages: ['@clip-ai/types', '@clip-ai/regolo-client'],
+  transpilePackages: [
+    '@clip-ai/types',
+    '@clip-ai/regolo-client',
+    '@clip-ai/database',
+  ],
   experimental: {
     serverActions: {
       bodySizeLimit: '500mb',
@@ -23,6 +27,10 @@ const nextConfig = {
         hostname: '**.r2.dev',
       },
     ],
+  },
+  // Don't fail builds on TypeScript errors in workspace packages
+  typescript: {
+    ignoreBuildErrors: false,
   },
 };
 

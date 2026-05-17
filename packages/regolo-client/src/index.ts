@@ -1,3 +1,3 @@
-export { RegoloClient } from './client.js';
-export { REGOLO_MODELS, getModelByCapability } from './models.js';
-export type { RegoloConfig, TranscriptionOptions, HighlightOptions, CaptionStyleOptions } from './types.js';
+export { RegoloClient } from './client';
+export { REGOLO_MODELS, getModelByCapability } from './models';
+export type { RegoloConfig, TranscriptionOptions, HighlightOptions, CaptionStyleOptions } from './types';

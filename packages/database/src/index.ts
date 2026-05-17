@@ -6,7 +6,7 @@
  */
 
 // ─── Prisma Client Singleton ─────────────────────────
-export { prisma } from './client.js';
+export { prisma } from './client';
 
 // ─── Prisma-Generated Types & Enums ──────────────────
 export type {
@@ -16,7 +16,7 @@ export type {
   Transcript,
   Export,
   Job,
-} from './types.js';
+} from './types';
 
 export {
   VideoStatus,
@@ -28,14 +28,14 @@ export {
   CaptionAnimation,
   UserRole,
   UserPlan,
-} from './types.js';
+} from './types';
 
 // ─── Enum Mapping Utilities ──────────────────────────
 export {
   toTSJobType,
   toPrismaJobType,
   assertEnumAlignment,
-} from './enums.js';
+} from './enums';
 
 // Re-export the local enum type definitions for use before prisma generate
-export type { PrismaJobType, TSJobType } from './enums.js';
+export type { PrismaJobType, TSJobType } from './enums';

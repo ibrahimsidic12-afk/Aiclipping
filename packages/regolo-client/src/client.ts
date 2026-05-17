@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { REGOLO_MODELS, getModelByCapability } from './models.js';
+import { REGOLO_MODELS, getModelByCapability } from './models';
 import type {
   RegoloConfig,
   TranscriptionOptions,
@@ -10,7 +10,7 @@ import type {
   CaptionStyleOptions,
   CaptionResult,
   StyledCaption,
-} from './types.js';
+} from './types';
 
 /**
  * RegoloClient - High-performance wrapper around Regolo's OpenAI-compatible API.
@@ -57,7 +57,7 @@ export class RegoloClient {
 
     const fileObj = file instanceof File
       ? file
-      : new File([file], 'audio.mp3', { type: 'audio/mpeg' });
+      : new File([file as BlobPart], 'audio.mp3', { type: 'audio/mpeg' });
 
     const response = await this.client.audio.transcriptions.create({
       file: fileObj,

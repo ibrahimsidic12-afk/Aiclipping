@@ -1,5 +1,5 @@
-import type { CaptionStyle, CaptionAnimation } from './caption.js';
-import type { Platform } from './platform.js';
+import type { CaptionStyle, CaptionAnimation } from './caption';
+import type { Platform } from './platform';
 
 export type ClipStatus =
   | 'suggested'     // AI suggested, not yet approved
