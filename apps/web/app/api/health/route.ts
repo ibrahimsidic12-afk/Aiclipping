@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
 
+// Force dynamic rendering - this route checks live database connectivity
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 /**
  * GET /api/health
  * Health check endpoint for monitoring and load balancers.

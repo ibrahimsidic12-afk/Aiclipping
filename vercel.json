@@ -1,6 +1,5 @@
 {
   "buildCommand": "pnpm --filter @clip-ai/web build",
   "installCommand": "pnpm install --no-frozen-lockfile",
-  "framework": "nextjs",
-  "outputDirectory": "apps/web/.next"
+  "framework": "nextjs"
 }
