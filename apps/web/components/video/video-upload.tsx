@@ -53,7 +53,7 @@ export function VideoUpload() {
 
       if (!response.ok) throw new Error('Failed to get upload URL');
 
-      const { uploadUrl, videoId } = await response.json();
+      const { data: { uploadUrl, videoId } } = await response.json();
 
       // 2. Upload to S3 with progress tracking
       const xhr = new XMLHttpRequest();
