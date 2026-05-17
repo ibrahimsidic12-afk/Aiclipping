@@ -5,7 +5,9 @@ export type JobType =
   | 'render-clip'
   | 'generate-preview'
   | 'extract-keyframes'
-  | 'analyze-keyframes';
+  | 'analyze-keyframes'
+  | 'youtube-download'
+  | 'auto-clip';
 
 export type JobStatus =
   | 'waiting'
@@ -55,6 +57,35 @@ export interface JobPayloadMap {
     frameStorageKeys: string[];
     transcript: string;
   };
+  'youtube-download': {
+    importId: string;
+    videoId: string;
+    url: string;
+    youtubeVideoId: string;
+    settings: {
+      platform: string;
+      maxClips: number;
+      minDuration: number;
+      maxDuration: number;
+      style: string;
+      autoCaptions: boolean;
+      captionStyle: string;
+    };
+  };
+  'auto-clip': {
+    videoId: string;
+    transcriptId: string;
+    videoStorageKey: string;
+    settings: {
+      maxClips: number;
+      targetPlatform: string;
+      style: string;
+      minDuration: number;
+      maxDuration: number;
+      autoCaptions: boolean;
+      captionStyle: string;
+    };
+  };
 }
 
 export type JobPayload = JobPayloadMap[JobType];
@@ -91,6 +122,26 @@ export interface JobResultMap {
       timestamp: number;
       description: string;
       engagementScore: number;
+    }>;
+  };
+  'youtube-download': {
+    videoId: string;
+    storageKey: string;
+    duration: number;
+    title: string;
+    fileSize: number;
+  };
+  'auto-clip': {
+    clipIds: string[];
+    count: number;
+    clips: Array<{
+      id: string;
+      startTime: number;
+      endTime: number;
+      title: string;
+      hookText: string;
+      viralityScore: number;
+      tags: string[];
     }>;
   };
 }

@@ -4,6 +4,8 @@ import { processTranscription } from '../jobs/transcribe.job.js';
 import { processHighlightDetection } from '../jobs/detect-highlights.job.js';
 import { processRenderClip } from '../jobs/render-clip.job.js';
 import { processCaptionGeneration } from '../jobs/generate-captions.job.js';
+import { processYouTubeDownload } from '../jobs/youtube-download.job.js';
+import { processAutoClip } from '../jobs/auto-clip.job.js';
 import { logger } from '../lib/logger.js';
 import type { JobType } from '@clip-ai/types';
 
@@ -15,6 +17,8 @@ export interface QueueMap {
   'generate-captions': Queue;
   'render-clip': Queue;
   'generate-preview': Queue;
+  'youtube-download': Queue;
+  'auto-clip': Queue;
 }
 
 /**
@@ -45,6 +49,15 @@ export function createQueues(): QueueMap {
       },
     }),
     'generate-preview': new Queue('generate-preview', defaultOpts),
+    'youtube-download': new Queue('youtube-download', {
+      ...defaultOpts,
+      defaultJobOptions: {
+        ...defaultOpts.defaultJobOptions,
+        attempts: 2,
+        backoff: { type: 'exponential' as const, delay: 10000 },
+      },
+    }),
+    'auto-clip': new Queue('auto-clip', defaultOpts),
   };
 }
 
@@ -86,6 +99,24 @@ export function createWorkers(): Worker[] {
     new Worker('render-clip', processRenderClip, {
       connection,
       concurrency: Math.max(1, Math.floor(CONCURRENCY / 2)),
+    })
+  );
+
+  // YouTube download worker (network-heavy, limited concurrency)
+  workers.push(
+    new Worker('youtube-download', processYouTubeDownload, {
+      connection,
+      concurrency: 2, // Limit concurrent downloads
+      limiter: { max: 3, duration: 60_000 }, // Max 3 per minute
+    })
+  );
+
+  // Auto-clip worker (LLM API call + queue management)
+  workers.push(
+    new Worker('auto-clip', processAutoClip, {
+      connection,
+      concurrency: CONCURRENCY,
+      limiter: { max: 5, duration: 60_000 },
     })
   );
 

@@ -19,3 +19,9 @@ export type {
 } from './caption.js';
 export type { Platform, ExportPreset } from './platform.js';
 export type { ApiResponse, PaginatedResponse, ApiError } from './api.js';
+export type {
+  YouTubeImport,
+  YouTubeImportStatus,
+  AutoClipSettings,
+  YouTubeVideoInfo,
+} from './youtube.js';
