@@ -1,0 +1,6 @@
+{
+  "buildCommand": "pnpm turbo build --filter=@clip-ai/web",
+  "outputDirectory": "apps/web/.next",
+  "framework": "nextjs",
+  "installCommand": "pnpm install"
+}
