@@ -113,7 +113,17 @@ export function VideoUpload() {
       setProgress(92);
       setState('processing');
 
-      // 3. Notify backend upload is complete and start processing
+      // 3. Mark the upload as complete so the server can verify it landed in S3
+      //    and flip status from "uploading" → "uploaded".
+      const completeRes = await fetch(`/api/videos/${videoId}/upload-complete`, {
+        method: 'POST',
+      });
+      if (!completeRes.ok) {
+        const errData = await completeRes.json().catch(() => null);
+        throw new Error(errData?.error?.message || 'Failed to confirm upload');
+      }
+
+      // 4. Trigger the AI pipeline.
       const processRes = await fetch(`/api/videos/${videoId}/process`, { method: 'POST' });
       if (!processRes.ok) {
         const errData = await processRes.json().catch(() => null);

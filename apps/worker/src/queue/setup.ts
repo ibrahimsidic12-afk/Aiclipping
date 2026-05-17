@@ -6,6 +6,7 @@ import { processRenderClip } from '../jobs/render-clip.job.js';
 import { processCaptionGeneration } from '../jobs/generate-captions.job.js';
 import { logger } from '../lib/logger.js';
 import { persistenceService } from '../lib/persistence.js';
+import { closeAllQueues } from './client.js';
 
 const CONCURRENCY = parseInt(process.env.CONCURRENT_WORKERS || '3', 10);
 
@@ -173,8 +174,12 @@ export async function gracefulShutdown(workers: Worker[], queues: QueueMap): Pro
   // Close workers first (stop processing)
   await Promise.allSettled(workers.map(w => w.close()));
 
-  // Then close queues
-  await Promise.allSettled(Object.values(queues).map(q => q.close()));
+  // Then close queues (both the worker-side queues defined here and any
+  // shared producer queues used inside job processors).
+  await Promise.allSettled([
+    ...Object.values(queues).map(q => q.close()),
+    closeAllQueues(),
+  ]);
 
   // Close Redis
   const redis = getRedisConnection();

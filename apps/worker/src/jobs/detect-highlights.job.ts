@@ -5,6 +5,7 @@ import { logger } from '../lib/logger.js';
 import { persistenceService } from '../lib/persistence.js';
 import { prisma } from '@clip-ai/database';
 import { readFile } from 'fs/promises';
+import { getQueue } from '../queue/client.js';
 
 interface HighlightPayload {
   videoId: string;
@@ -92,23 +93,22 @@ export async function processHighlightDetection(
 
   await job.updateProgress(90);
 
-  // Step 5: Enqueue caption generation for each clip
-  const { Queue } = await import('bullmq');
-  const { getRedisConnection } = await import('../lib/redis.js');
-  const captionQueue = new Queue('generate-captions', {
-    connection: getRedisConnection(),
-  });
-
+  // Step 5: Enqueue caption generation for each clip via the shared queue
+  // singleton (don't construct a new Queue per call).
+  const captionQueue = getQueue('generate-captions');
   for (const clipId of clipIds) {
-    await captionQueue.add('generate-captions', {
-      clipId,
-      transcriptId,
-      videoId,
-      style: 'bold', // Default style
-    }, { priority: 3 });
+    await captionQueue.add(
+      'generate-captions',
+      {
+        clipId,
+        transcriptId,
+        videoId,
+        style: 'bold', // Default style
+      },
+      { priority: 3 }
+    );
   }
 
-  await captionQueue.close();
   await job.updateProgress(100);
 
   return { clipIds, count: clipIds.length };

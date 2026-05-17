@@ -3,7 +3,7 @@ import { renderClip, getPreset } from '@clip-ai/video-core';
 import { downloadToTemp, uploadFromPath } from '../lib/storage.js';
 import { logger } from '../lib/logger.js';
 import { persistenceService } from '../lib/persistence.js';
-import { Platform } from '@clip-ai/database';
+import { prisma, Platform } from '@clip-ai/database';
 import { unlink } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -121,7 +121,28 @@ export async function processRenderClip(
     logger.info(`Persisted export record: ${exportId}`);
     await job.updateProgress(95);
 
-    // Step 6: Cleanup
+    // Step 6: Mark the parent video "ready" the first time any of its
+    // clips renders successfully. We don't fail the job if this update
+    // fails — the export record is the source of truth.
+    try {
+      const clip = await prisma.clip.findUnique({
+        where: { id: clipId },
+        select: { videoId: true },
+      });
+      if (clip?.videoId) {
+        await prisma.video.updateMany({
+          where: { id: clip.videoId, status: { not: 'ready' } },
+          data: { status: 'ready' },
+        });
+      }
+    } catch (err) {
+      logger.warn(`Failed to mark video ready after render`, {
+        clipId,
+        error: (err as Error).message,
+      });
+    }
+
+    // Step 7: Cleanup
     await Promise.allSettled(tempFiles.map(f => unlink(f)));
     await job.updateProgress(100);
 

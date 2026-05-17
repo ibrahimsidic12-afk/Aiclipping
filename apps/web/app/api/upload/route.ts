@@ -1,25 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { prisma } from '@/lib/db';
+import { getUploadUrl } from '@/lib/s3';
 
 // Force dynamic rendering — this route uses runtime env vars and database
 export const dynamic = 'force-dynamic';
 
-const s3 = new S3Client({
-  region: process.env.S3_REGION || 'us-east-1',
-  endpoint: process.env.S3_ENDPOINT || undefined,
-  forcePathStyle: process.env.S3_PROVIDER !== 'r2', // R2 uses virtual-hosted style
-  credentials: {
-    accessKeyId: process.env.S3_ACCESS_KEY || 'minioadmin',
-    secretAccessKey: process.env.S3_SECRET_KEY || 'minioadmin',
-  },
-});
-
-const BUCKET = process.env.S3_BUCKET || 'clip-app-videos';
-
-const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE_MB || '500', 10) * 1024 * 1024;
+const MAX_FILE_SIZE =
+  parseInt(process.env.MAX_FILE_SIZE_MB || '500', 10) * 1024 * 1024;
 
 const ALLOWED_TYPES = [
   'video/mp4',
@@ -36,7 +24,9 @@ function sanitizeFilename(filename: string): string {
 
 /**
  * POST /api/upload
- * Generate a presigned S3 upload URL for the client and persist a Video record.
+ * Generate a presigned S3 upload URL for the client and persist a Video
+ * record in `uploading` status. The client follows up with PUT to the URL,
+ * then calls POST /api/videos/:id/upload-complete to flip status.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -76,7 +66,8 @@ export async function POST(request: NextRequest) {
     const storageKey = `uploads/${videoId}/original.${extension}`;
 
     // TODO: Replace with real authenticated user ID from auth middleware
-    const userId = request.headers.get('x-user-id') || '00000000-0000-0000-0000-000000000000';
+    const userId =
+      request.headers.get('x-user-id') || '00000000-0000-0000-0000-000000000000';
 
     // Ensure the dev user exists (foreign key constraint requires a valid User)
     await prisma.user.upsert({
@@ -101,15 +92,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Generate real presigned URL for client-side upload
-    const putCommand = new PutObjectCommand({
-      Bucket: BUCKET,
-      Key: storageKey,
-      ContentType: contentType,
-      ContentLength: size,
-    });
-
-    const uploadUrl = await getSignedUrl(s3, putCommand, { expiresIn: 3600 });
+    const uploadUrl = await getUploadUrl(storageKey, contentType, size, 3600);
 
     return NextResponse.json({
       success: true,

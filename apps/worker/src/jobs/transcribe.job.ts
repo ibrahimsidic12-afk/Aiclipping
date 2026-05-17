@@ -8,6 +8,7 @@ import { readFile, unlink } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
+import { getQueue } from '../queue/client.js';
 
 interface TranscribePayload {
   videoId: string;
@@ -110,20 +111,18 @@ export async function processTranscription(
   await job.updateProgress(92);
 
   // Step 7: Enqueue highlight detection (next pipeline step)
-  const { Queue } = await import('bullmq');
-  const { getRedisConnection } = await import('../lib/redis.js');
-  const highlightQueue = new Queue('detect-highlights', {
-    connection: getRedisConnection(),
-  });
+  const highlightQueue = getQueue('detect-highlights');
+  await highlightQueue.add(
+    'detect-highlights',
+    {
+      videoId,
+      transcriptId,
+      maxClips: 5,
+      targetPlatform: 'all',
+    },
+    { priority: 2 }
+  );
 
-  await highlightQueue.add('detect-highlights', {
-    videoId,
-    transcriptId,
-    maxClips: 5,
-    targetPlatform: 'all',
-  }, { priority: 2 });
-
-  await highlightQueue.close();
   await job.updateProgress(100);
 
   logger.info(`Transcription job complete for video: ${videoId}`);

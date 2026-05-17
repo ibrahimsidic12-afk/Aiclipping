@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { deleteObject, getReadUrl, listObjects } from '@/lib/s3';
 
 // Force dynamic rendering — these routes need database access at runtime
 export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/videos/:id
- * Returns a single video with its clips, transcript, and job status.
+ * Returns a single video with its clips, transcript, and recent jobs.
+ *
+ * Generates a short-lived (1h) presigned playback URL on the fly. We do
+ * not persist this URL anywhere — clients reload the page or refetch
+ * the route to get a fresh one.
  */
 export async function GET(
   _request: NextRequest,
@@ -78,6 +83,17 @@ export async function GET(
       );
     }
 
+    // Generate a fresh playback URL. If S3 is misconfigured we don't want to
+    // bring down the whole detail endpoint — log and serve null.
+    let playbackUrl: string | null = video.url ?? null;
+    if (video.storageKey) {
+      try {
+        playbackUrl = await getReadUrl(video.storageKey, 3600);
+      } catch (err) {
+        console.warn('Failed to sign playback URL:', (err as Error).message);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       data: {
@@ -85,7 +101,7 @@ export async function GET(
           id: video.id,
           originalName: video.originalName,
           status: video.status,
-          url: video.url,
+          url: playbackUrl,
           thumbnailUrl: video.thumbnailUrl,
           metadata: video.metadata,
           tags: video.tags,
@@ -149,7 +165,15 @@ export async function PATCH(
 
 /**
  * DELETE /api/videos/:id
- * Delete a video and all associated data, queue S3 cleanup.
+ *
+ * Cascade-deletes the video row (cascades into clips/transcript/exports
+ * via Prisma relations). Then best-effort cleans up the S3 prefixes:
+ * uploads/{videoId}/, transcripts/{videoId}/, captions/{clipId}/,
+ * clips/{clipId}/.
+ *
+ * S3 cleanup is intentionally best-effort: we never block the response
+ * on a slow S3 list. If a prefix has stragglers, a periodic worker
+ * cleanup job can reclaim them later.
  */
 export async function DELETE(
   _request: NextRequest,
@@ -175,70 +199,26 @@ export async function DELETE(
       );
     }
 
-    // Collect all S3 keys to clean up
-    const keysToDelete: string[] = [video.storageKey];
-    if (video.transcript?.storageKey) {
-      keysToDelete.push(video.transcript.storageKey);
-    }
-    for (const clip of video.clips) {
-      // Caption files follow pattern: captions/{clipId}/*.ass
-      keysToDelete.push(`captions/${clip.id}/`);
-      // Rendered clips follow pattern: clips/{clipId}/*.mp4
-      keysToDelete.push(`clips/${clip.id}/`);
-    }
+    const clipIds = video.clips.map((c) => c.id);
 
     // Cascade delete handles clips, transcript, exports, jobs
     await prisma.video.delete({ where: { id: videoId } });
 
-    // Queue S3 cleanup as a background job (best-effort, don't block response)
+    // Best-effort S3 cleanup. Wrapped so it never throws into the response.
     try {
-      const { S3Client, DeleteObjectCommand, ListObjectsV2Command } = await import('@aws-sdk/client-s3');
-      const s3 = new S3Client({
-        region: process.env.S3_REGION || 'us-east-1',
-        endpoint: process.env.S3_ENDPOINT || undefined,
-        forcePathStyle: process.env.S3_PROVIDER !== 'r2',
-        credentials: {
-          accessKeyId: process.env.S3_ACCESS_KEY || '',
-          secretAccessKey: process.env.S3_SECRET_KEY || '',
-        },
-      });
-      const bucket = process.env.S3_BUCKET || 'clip-app-videos';
-
-      // Delete known keys and prefixes
-      for (const key of keysToDelete) {
-        if (key.endsWith('/')) {
-          // It's a prefix — list and delete all objects under it
-          const listed = await s3.send(new ListObjectsV2Command({
-            Bucket: bucket,
-            Prefix: key,
-          }));
-          if (listed.Contents) {
-            await Promise.allSettled(
-              listed.Contents.map(obj =>
-                s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: obj.Key! }))
-              )
-            );
-          }
-        } else {
-          await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key })).catch(() => {});
-        }
-      }
-
-      // Also clean up the uploads/{videoId}/ prefix
-      const uploadPrefix = `uploads/${videoId}/`;
-      const uploadListed = await s3.send(new ListObjectsV2Command({
-        Bucket: bucket,
-        Prefix: uploadPrefix,
-      }));
-      if (uploadListed.Contents) {
-        await Promise.allSettled(
-          uploadListed.Contents.map(obj =>
-            s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: obj.Key! }))
-          )
-        );
-      }
+      await Promise.allSettled([
+        deleteObject(video.storageKey),
+        ...(video.transcript?.storageKey
+          ? [deleteObject(video.transcript.storageKey)]
+          : []),
+        deletePrefix(`uploads/${videoId}/`),
+        deletePrefix(`transcripts/${videoId}/`),
+        ...clipIds.flatMap((clipId) => [
+          deletePrefix(`captions/${clipId}/`),
+          deletePrefix(`clips/${clipId}/`),
+        ]),
+      ]);
     } catch (s3Error) {
-      // S3 cleanup is best-effort — log but don't fail the request
       console.warn('S3 cleanup failed (will be orphaned):', (s3Error as Error).message);
     }
 
@@ -249,5 +229,19 @@ export async function DELETE(
       { success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to delete video' } },
       { status: 500 }
     );
+  }
+}
+
+/**
+ * Lists everything under a prefix and deletes objects one by one.
+ * Returns silently on errors — this is purely a best-effort cleanup.
+ */
+async function deletePrefix(prefix: string): Promise<void> {
+  try {
+    const keys = await listObjects(prefix);
+    if (keys.length === 0) return;
+    await Promise.allSettled(keys.map((key) => deleteObject(key)));
+  } catch (err) {
+    console.warn(`Failed to clean up prefix ${prefix}:`, (err as Error).message);
   }
 }

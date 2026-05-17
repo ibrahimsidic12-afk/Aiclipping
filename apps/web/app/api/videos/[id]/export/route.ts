@@ -1,13 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { toPrismaJobType } from '@clip-ai/database';
+import { enqueueJob } from '@/lib/queue';
 
 // Force dynamic rendering — these routes need database access at runtime
 export const dynamic = 'force-dynamic';
 
 /**
  * POST /api/videos/:id/export
+ *
  * Queue a render job for a clip with the specified settings.
+ *
+ * Creates a `render-clip` Job row, updates the related Clip's status to
+ * "queued" if applicable, and enqueues a BullMQ job that the worker will
+ * pick up. The DB job id is reused as the BullMQ job id so worker
+ * lifecycle hooks update the same row.
  */
 export async function POST(
   request: NextRequest,
@@ -21,13 +28,19 @@ export async function POST(
       startTime: number;
       endTime: number;
       platform: string;
-      captionStyle: string;
+      captionStyle?: string;
     };
 
     // Validate
     if (startTime === undefined || endTime === undefined || !platform) {
       return NextResponse.json(
-        { success: false, error: { code: 'VALIDATION_ERROR', message: 'Missing required fields: startTime, endTime, platform' } },
+        {
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Missing required fields: startTime, endTime, platform',
+          },
+        },
         { status: 400 }
       );
     }
@@ -39,7 +52,6 @@ export async function POST(
       );
     }
 
-    // Verify video exists
     const video = await prisma.video.findUnique({
       where: { id: videoId },
       select: { id: true, storageKey: true, status: true },
@@ -52,30 +64,92 @@ export async function POST(
       );
     }
 
-    // Create a render job
-    const job = await prisma.job.create({
-      data: {
-        type: toPrismaJobType('render-clip'),
-        status: 'waiting',
-        videoId: video.id,
-        clipId: clipId || null,
-        payload: {
-          videoStorageKey: video.storageKey,
-          startTime,
-          endTime,
-          platform,
-          captionStyle,
-          preset: getPresetKey(platform),
+    const presetKey = getPresetKey(platform);
+
+    // If we have a clipId, look up its caption file (if any) so the render
+    // job burns it in. Otherwise the user is exporting an ad-hoc range.
+    let subtitleStorageKey: string | undefined;
+    if (clipId) {
+      // Captions are stored at captions/{clipId}/{style}.ass
+      // We don't query S3 here — the worker will treat a missing file as a
+      // soft-fail and still render without subtitles.
+      const style = captionStyle || 'bold';
+      subtitleStorageKey = `captions/${clipId}/${style}.ass`;
+    }
+
+    const job = await prisma.$transaction(async (tx) => {
+      const created = await tx.job.create({
+        data: {
+          type: toPrismaJobType('render-clip'),
+          status: 'waiting',
+          videoId: video.id,
+          clipId: clipId || null,
+          payload: {
+            videoId: video.id,
+            clipId: clipId ?? null,
+            videoStorageKey: video.storageKey,
+            subtitleStorageKey: subtitleStorageKey ?? null,
+            startTime,
+            endTime,
+            platform,
+            captionStyle: captionStyle ?? null,
+            preset: presetKey,
+          },
         },
-      },
+      });
+
+      if (clipId) {
+        await tx.clip.update({
+          where: { id: clipId },
+          data: { status: 'queued' },
+        });
+      }
+
+      return created;
     });
 
-    // Update clip status if provided
-    if (clipId) {
-      await prisma.clip.update({
-        where: { id: clipId },
-        data: { status: 'queued' },
-      });
+    try {
+      await enqueueJob(
+        'render-clip',
+        'render-clip',
+        {
+          clipId: clipId || job.id, // worker expects a stable id for the output path
+          videoId: video.id,
+          videoStorageKey: video.storageKey,
+          subtitleStorageKey,
+          preset: presetKey,
+          platform,
+          startTime,
+          endTime,
+        },
+        { dbJobId: job.id, priority: 5 }
+      );
+    } catch (enqueueErr) {
+      console.error('Failed to enqueue render job; marking failed:', enqueueErr);
+      await prisma
+        .$transaction([
+          prisma.job.update({
+            where: { id: job.id },
+            data: { status: 'failed', error: 'Failed to enqueue render job' },
+          }),
+          ...(clipId
+            ? [prisma.clip.update({ where: { id: clipId }, data: { status: 'error' } })]
+            : []),
+        ])
+        .catch((rollbackErr) => {
+          console.error('Rollback after enqueue failure also failed:', rollbackErr);
+        });
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'QUEUE_UNAVAILABLE',
+            message: 'Could not queue the export. Please try again.',
+          },
+        },
+        { status: 503 }
+      );
     }
 
     return NextResponse.json({

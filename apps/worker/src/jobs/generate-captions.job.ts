@@ -3,6 +3,8 @@ import { generateASS, splitIntoLines } from '@clip-ai/video-core';
 import { downloadToTemp, uploadBuffer } from '../lib/storage.js';
 import { logger } from '../lib/logger.js';
 import { readFile, unlink } from 'fs/promises';
+import { prisma } from '@clip-ai/database';
+import { getQueue } from '../queue/client.js';
 
 interface CaptionPayload {
   clipId: string;
@@ -88,6 +90,48 @@ export async function processCaptionGeneration(
 
   // Cleanup
   await unlink(transcriptPath).catch(() => {});
+
+  // Step 5: Auto-enqueue a default render so the pipeline produces a
+  // playable clip without requiring the user to click Export. The user
+  // can later re-export with different settings via /api/videos/:id/export.
+  try {
+    const clip = await prisma.clip.findUnique({
+      where: { id: clipId },
+      include: {
+        video: { select: { storageKey: true } },
+      },
+    });
+
+    if (clip && clip.video?.storageKey) {
+      const renderQueue = getQueue('render-clip');
+      const platform = 'tiktok';
+      const presetKey = 'tiktok-1080';
+      await renderQueue.add(
+        'render-clip',
+        {
+          clipId: clip.id,
+          videoId: clip.videoId,
+          videoStorageKey: clip.video.storageKey,
+          subtitleStorageKey: subtitleKey,
+          preset: presetKey,
+          platform,
+          startTime: clip.startTime,
+          endTime: clip.endTime,
+        },
+        { priority: 5 }
+      );
+      logger.info(`Enqueued auto-render for clip ${clipId}`, { platform });
+    } else {
+      logger.warn(`Skipping auto-render — clip ${clipId} or its video missing`);
+    }
+  } catch (err) {
+    // Auto-render is best-effort. If it fails, the user can still
+    // export manually via the editor.
+    logger.warn(`Failed to auto-enqueue render for clip ${clipId}`, {
+      error: (err as Error).message,
+    });
+  }
+
   await job.updateProgress(100);
 
   logger.info(`Captions generated for clip: ${clipId}`, { style, lines: lines.length });
