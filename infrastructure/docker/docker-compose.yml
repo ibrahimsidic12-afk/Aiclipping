@@ -1,9 +1,16 @@
 version: '3.8'
 
 # ============================================
-# ClipAI - Local Development Infrastructure
+# ClipAI - Development & Production Infrastructure
 # ============================================
-# Start: docker compose up -d
+#
+# LOCAL DEV (with MinIO for storage):
+#   docker compose up -d
+#
+# PRODUCTION (with Cloudflare R2 for storage):
+#   docker compose --profile production up -d
+#   (MinIO is NOT started — uses R2 instead)
+#
 # Stop:  docker compose down
 # Logs:  docker compose logs -f [service]
 # ============================================
@@ -11,6 +18,7 @@ version: '3.8'
 services:
   # ─────────────────────────────────────────
   # Redis - Job Queue (BullMQ)
+  # Required in ALL environments
   # ─────────────────────────────────────────
   redis:
     image: redis:7-alpine
@@ -28,11 +36,13 @@ services:
     restart: unless-stopped
 
   # ─────────────────────────────────────────
-  # MinIO - S3-Compatible Object Storage
+  # MinIO - Local Dev S3 Storage
+  # (Not needed in production — use Cloudflare R2)
   # ─────────────────────────────────────────
   minio:
     image: minio/minio:latest
     container_name: clipai-minio
+    profiles: ["dev", "default"]
     ports:
       - "9000:9000"   # API
       - "9001:9001"   # Console UI
@@ -49,10 +59,11 @@ services:
       retries: 5
     restart: unless-stopped
 
-  # MinIO bucket initialization
+  # MinIO bucket initialization (dev only)
   minio-init:
     image: minio/mc:latest
     container_name: clipai-minio-init
+    profiles: ["dev", "default"]
     depends_on:
       minio:
         condition: service_healthy
@@ -64,6 +75,38 @@ services:
       echo 'Bucket created and configured.';
       exit 0;
       "
+
+  # ─────────────────────────────────────────
+  # Worker - Video Processing Service
+  # ─────────────────────────────────────────
+  worker:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/worker.Dockerfile
+    container_name: clipai-worker
+    profiles: ["production"]
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      # Regolo AI
+      - REGOLO_API_KEY=${REGOLO_API_KEY}
+      - REGOLO_BASE_URL=${REGOLO_BASE_URL:-https://api.regolo.ai/v1}
+      # Storage (Cloudflare R2 in production)
+      - S3_PROVIDER=${S3_PROVIDER:-r2}
+      - S3_BUCKET=${S3_BUCKET:-aicliping}
+      - S3_REGION=${S3_REGION:-auto}
+      - S3_ENDPOINT=${S3_ENDPOINT}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY}
+      - S3_SECRET_KEY=${S3_SECRET_KEY}
+      - S3_PUBLIC_URL=${S3_PUBLIC_URL}
+      # Redis
+      - REDIS_URL=redis://redis:6379
+      # Processing
+      - CONCURRENT_WORKERS=${CONCURRENT_WORKERS:-3}
+      - MAX_VIDEO_DURATION_SECONDS=${MAX_VIDEO_DURATION_SECONDS:-1800}
+      - NODE_ENV=production
+    restart: unless-stopped
 
   # ─────────────────────────────────────────
   # BullMQ Board - Queue Dashboard UI

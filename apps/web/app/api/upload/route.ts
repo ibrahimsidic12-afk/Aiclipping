@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE_MB || '500', 10) * 1024 * 1024;
 
@@ -11,9 +13,24 @@ const ALLOWED_TYPES = [
   'video/webm',
 ];
 
+const PROVIDER = process.env.S3_PROVIDER || 'minio';
+const isMinIO = PROVIDER === 'minio';
+
+const s3 = new S3Client({
+  region: process.env.S3_REGION || (isMinIO ? 'us-east-1' : 'auto'),
+  endpoint: process.env.S3_ENDPOINT || undefined,
+  forcePathStyle: isMinIO,
+  credentials: {
+    accessKeyId: process.env.S3_ACCESS_KEY || 'minioadmin',
+    secretAccessKey: process.env.S3_SECRET_KEY || 'minioadmin',
+  },
+});
+
+const BUCKET = process.env.S3_BUCKET || 'clip-app-videos';
+
 /**
  * POST /api/upload
- * Generate a presigned S3 upload URL for the client.
+ * Generate a presigned S3/R2 upload URL for the client.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -51,9 +68,16 @@ export async function POST(request: NextRequest) {
     const extension = filename.split('.').pop() || 'mp4';
     const storageKey = `uploads/${videoId}/original.${extension}`;
 
-    // TODO: Generate real presigned URL with @aws-sdk/client-s3
-    // For now, return a mock response structure
-    const uploadUrl = `${process.env.S3_ENDPOINT || 'http://localhost:9000'}/${process.env.S3_BUCKET || 'clip-app-videos'}/${storageKey}`;
+    // Generate real presigned upload URL (works with R2, S3, and MinIO)
+    const uploadUrl = await getSignedUrl(
+      s3,
+      new PutObjectCommand({
+        Bucket: BUCKET,
+        Key: storageKey,
+        ContentType: contentType,
+      }),
+      { expiresIn: 3600 } // 1 hour
+    );
 
     return NextResponse.json({
       success: true,
@@ -61,7 +85,7 @@ export async function POST(request: NextRequest) {
         videoId,
         uploadUrl,
         storageKey,
-        expiresIn: 3600, // URL valid for 1 hour
+        expiresIn: 3600,
       },
     });
   } catch (error) {
